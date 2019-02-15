@@ -29,7 +29,10 @@ enum ledState {
   ORANGE_STEADY,
   GREEN_PING,
   BLUE_ROTATING,
-  PURPLE_STEADY
+  PURPLE_STEADY,
+  GREEN_BREATHING,
+  RED_BREATHING,
+  RED_ALTERNATING
 };
 
 
@@ -39,10 +42,15 @@ bool D1state = false;
 
 // TIMERS
 unsigned long LEDTime = 0;
+unsigned long resetWait = 0;
 
 // LEDS
 uint8_t blueColor = 0;
 boolean blueBreathFlow = true;
+uint8_t greenColor = 0;
+boolean greenBreathFlow = true;
+uint8_t redColor = 0;
+boolean redBreathFlow = true;
 
 // PROTOTYPES
 void animateLed(char, unsigned long);
@@ -118,6 +126,8 @@ void loop() {
         state = LEAD;
       else if (strcmp(roundResp, "Pause") == 0)
         state = PAUSED;
+      else if (strcmp(roundResp, "Steady") == 0)
+        state = STEADY;
 
       animateLed(BLUE_STEADY, 0);
 
@@ -136,54 +146,73 @@ void loop() {
 
       break;
     case LEAD:
-      animateLed(PURPLE_STEADY, 0);
 
       char leadResp[9];
       strncpy(leadResp, OnMasterReceive(), 9);
-      if (strcmp(leadResp, "Win") == 0)
-        state = WIN;
-      else if (strcmp(leadResp, "Lose") == 0)
-        state = LOSE;
-      else if (strcmp(leadResp, "Excluded") == 0)
-        state = EXCLUDED;
 
-      // if (strcmp(OnMasterReceive(), "Win") == 0)
-      //   state = WIN;
-      // if (strcmp(OnMasterReceive(), "Lose") == 0)
-      //   state = LOSE;
-      // if (strcmp(OnMasterReceive(), "Excluded") == 0)
-      //   state = EXCLUDED;
+      if (strcmp(leadResp, "Win") == 0) {
+        resetWait = millis(); //TODO: changename
+        state = WIN;
+      }
+      else if (strcmp(leadResp, "Lose") == 0) {
+        state = LOSE;
+      }
+      else if (strcmp(leadResp, "Excluded") == 0) {
+        state = EXCLUDED;
+      }
+
+      animateLed(PURPLE_STEADY, 0);
 
       break;
 
     case EXCLUDED:
-      if (Udp.parsePacket()) {
-        int len = Udp.read(incomingPacket, 255);
-        if (len > 0)
-          incomingPacket[len] = 0;
-        Serial.printf("[%s] %s\n", Udp.remoteIP().toString().c_str(), incomingPacket);
-        if (strcmp(incomingPacket, "Steady") == 0) {
-          state = STEADY;
-        }
-      }
+
+      if (strcmp(OnMasterReceive(), "Steady") == 0)
+        state = STEADY;   // Or ROUND
+
+      animateLed(RED_ALTERNATING, 0);
+
       break;
 
     case PAUSED:
-      if (Udp.parsePacket()) {
-        int len = Udp.read(incomingPacket, 255);
-        if (len > 0)
-          incomingPacket[len] = 0;
-        Serial.printf("[%s] %s\n", Udp.remoteIP().toString().c_str(), incomingPacket);
-        if (strcmp(incomingPacket, "Round") == 0) {
-          state = ROUND;
-        }
-      }
+
+      char pauseResp[9];
+      strncpy(pauseResp, OnMasterReceive(), 9);
+      if (strcmp(pauseResp, "Steady") == 0)
+        state = STEADY;
+      else if (strcmp(pauseResp, "Round") == 0)   // TODO: remove ROUND ? -> bad UX
+        state = ROUND;
+
       break;
 
     case WIN:
+
+      // if (resetWait != 0 && millis() - resetWait >= 2000) {
+      //   Udp.beginPacket("192.168.4.1", 7777);
+      //   Udp.write("WinEnd");
+      //   Udp.endPacket();
+      //
+      //   resetWait = 0;
+      // }
+
+      if (strcmp(OnMasterReceive(), "Steady") == 0)
+        state = STEADY;   // Or ROUND
+
+      animateLed(GREEN_BREATHING, 5);
+
       break;
 
     case LOSE:
+
+      char loseResp[9];
+      strncpy(loseResp, OnMasterReceive(), 9);
+      if (strcmp(loseResp, "Exclude") == 0)
+        state = EXCLUDED;
+      else if (strcmp(loseResp, "Steady") == 0)
+        state = STEADY;
+
+      animateLed(RED_BREATHING, 5);
+
       break;
 
     default: break;
@@ -252,6 +281,61 @@ void animateLed(char ledState, unsigned long pauseTime) {
         }
       }
       break;
+    case GREEN_BREATHING:
+      if (millis() - LEDTime >= pauseTime) {
+        LEDTime = millis();
+        if (greenBreathFlow) {
+          for (int i = 0; i < NUM_LEDS; i++) {
+            leds[i] = CRGB(greenColor++, 0, 0);
+            FastLED.show();
+          }
+          if (greenColor >= 100)
+            greenBreathFlow = false;
+        }
+        else {
+          for (int i = 0; i < NUM_LEDS; i++) {
+            leds[i] = CRGB(greenColor--, 0, 0);
+            FastLED.show();
+          }
+          if (greenColor <= 0)
+            greenBreathFlow = true;
+        }
+      }
+      break;
+
+    case RED_BREATHING:
+      if (millis() - LEDTime >= pauseTime) {
+        LEDTime = millis();
+        if (redBreathFlow) {
+          for (int i = 0; i < NUM_LEDS; i++) {
+            leds[i] = CRGB(0, redColor++, 0);
+            FastLED.show();
+          }
+          if (redColor >= 100)
+            redBreathFlow = false;
+        }
+        else {
+          for (int i = 0; i < NUM_LEDS; i++) {
+            leds[i] = CRGB(0, redColor--, 0);
+            FastLED.show();
+          }
+          if (redColor <= 0)
+            redBreathFlow = true;
+        }
+      }
+      break;
+
+      case RED_ALTERNATING:
+        for (int i = 0; i < NUM_LEDS; i++) {
+          if (i%2 ==0 )
+            leds[i] = CRGB(0, 50, 0);
+          else
+            leds[i] = CRGB::Black;
+          FastLED.show();
+        }
+
+      break;
+
     default: break;
   }
 }
@@ -261,7 +345,6 @@ char* OnMasterReceive() {
     int len = Udp.read(incomingPacket, 255);
     if (len > 0)
       incomingPacket[len] = 0;
-    Serial.printf("[%s] %s\n", Udp.remoteIP().toString().c_str(), incomingPacket);
     return incomingPacket;
   }
   else
@@ -271,18 +354,17 @@ char* OnMasterReceive() {
 bool onButtonDown(uint8_t pin) {
   switch(pin) {
     case D1:
+      // On button down
       if (digitalRead(D1)) {
         if (!D1state) {
-          Serial.println("Push");
           D1state = true;
           // D1PushTime = millis();
           return true;
         }
       }
 
-
+      // On button up
       if (D1state && !digitalRead(D1)) {
-        Serial.println("Depush");
         D1state = false;
         // D1PushTime = 0;
       }
