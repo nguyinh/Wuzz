@@ -1,13 +1,19 @@
 #include <Arduino.h>
+#include <ArduinoOTA.h>
+#include <RemoteDebug.h>
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <FastLED.h>
+#include <SPI.h>
+// #include <TFT_eSPI.h>
 #include <String.h>
 #define NUM_LEDS 6
 #define LED_PIN D2
 
 CRGB leds[NUM_LEDS];
+// TFT_eSPI tft = TFT_eSPI();
 WiFiUDP Udp;
+// RemoteDebug Debug;
 WiFiEventHandler stationConnectedHandler;
 WiFiEventHandler stationDisconnectedHandler;
 
@@ -46,6 +52,8 @@ typedef struct {
 // STATE & CONTEXT
 char state = BOOTING;
 
+const int SCREEN_SIZE = 240;
+
 const char SLAVES_SIZE = 5;
 Slave slaves[SLAVES_SIZE];
 Slave pingedSlaves[SLAVES_SIZE];
@@ -72,7 +80,9 @@ boolean blueBreathFlow = true;
 
 // BUTTONS
 boolean D1state = false;
-boolean D7state = false;
+#define D1PIN D1
+boolean D6state = false;
+#define D6PIN D5
 
 // PROTOTYPES
 void setColor(uint8_t);
@@ -83,14 +93,28 @@ void onStationConnected(const WiFiEventSoftAPModeStationConnected&);
 void onStationDisconnected(const WiFiEventSoftAPModeStationDisconnected&);
 void sendState(unsigned char, int);
 
+// DEBUG
+bool doOnce = true;
+
 void setup() {
   delay(2000);
   FastLED.addLeds<WS2812B, LED_PIN, RGB>(leds, NUM_LEDS);
-  pinMode(D1, INPUT);
-  pinMode(D7, INPUT);
+  pinMode(D1PIN, INPUT);
+  pinMode(D6PIN, INPUT);
+
+
 
   Serial.begin(9600);
   Serial.println();
+
+  // Debug.begin("monEsp");
+
+  // tft.begin();
+  // tft.setRotation(1);
+  // tft.fillScreen(TFT_BLACK);
+  // tft.setTextSize(1);
+  // tft.setTextColor(TFT_WHITE);
+  // tft.setCursor(0, 0);
 
   Serial.println("[Setup Access point ...]");
   WiFi.mode(WIFI_AP);
@@ -114,6 +138,9 @@ void setup() {
 
   state = PAIRING;
   LEDTime = millis();   // Init LED delay timer
+
+  ArduinoOTA.setHostname("espmaster");
+  ArduinoOTA.begin();
 }
 
 void onStationConnected(const WiFiEventSoftAPModeStationConnected& evt) {
@@ -127,6 +154,32 @@ void onStationDisconnected(const WiFiEventSoftAPModeStationDisconnected& evt) {
 }
 
 void loop() {
+  // if (doOnce) {
+  //   Serial.println("Hello");
+  //   doOnce = false;
+  //   tft.fillScreen(TFT_WHITE);
+  //   tft.setTextSize(3);
+  //   tft.setTextColor(TFT_BLACK);
+  //
+  //   tft.fillRect(10, (SCREEN_SIZE/2)-12, 125, 25, TFT_GREEN);
+  //   tft.fillTriangle(10, (SCREEN_SIZE/2)-13, 10, (SCREEN_SIZE/2)+12, 0, SCREEN_SIZE/2, TFT_GREEN);
+  //   tft.setCursor(12, (SCREEN_SIZE/2)-10);
+  //   tft.println(F("EXCLUD"));
+  //
+  //   tft.fillRect((SCREEN_SIZE/4)-2, SCREEN_SIZE-35, 125, 25, TFT_YELLOW);
+  //   tft.fillTriangle((SCREEN_SIZE/2)+10, SCREEN_SIZE-10, (SCREEN_SIZE/2)-10, SCREEN_SIZE-10, SCREEN_SIZE/2, SCREEN_SIZE, TFT_YELLOW);
+  //   tft.setCursor(SCREEN_SIZE/4, SCREEN_SIZE-33);
+  //   tft.println(F("WIN"));
+  //
+  //   tft.fillRect(SCREEN_SIZE-125-10, (SCREEN_SIZE/4*3)-22, 125, 25, TFT_PINK);
+  //   tft.fillTriangle(SCREEN_SIZE-10, (SCREEN_SIZE/4*3)-23, SCREEN_SIZE-10, (SCREEN_SIZE/4*3)+2, SCREEN_SIZE, SCREEN_SIZE/4*3-10, TFT_PINK);
+  //   tft.setCursor(SCREEN_SIZE-125, (SCREEN_SIZE/4*3)-20);
+  //   tft.println(F("LOBBY"));
+
+  //   while(millis() - LEDTime < 1000)
+  //     yield();
+  // }
+
   switch(state) {
     case PAIRING:
       // Get connected Slave
@@ -243,7 +296,7 @@ void loop() {
 
       animateLed(BLUE_BREATHING, 5);
 
-      if (onButtonUp(D1)) {
+      if (onButtonUp(D1PIN)) {
         for (int s=0; s<SLAVES_SIZE ; s++) {
           if (slaves[s].IP != "") {
             sendState(STEADY, s);
@@ -263,7 +316,7 @@ void loop() {
 
       animateLed(ORANGE_STEADY, 0);
 
-      if (onButtonUp(D1)) {
+      if (onButtonUp(D1PIN)) {
         for (int s=0; s<SLAVES_SIZE ; s++) {
           if (slaves[s].state == STEADY && slaves[s].IP != "") {
             // TODO: watch for multisend
@@ -302,7 +355,7 @@ void loop() {
       }
 
       // Back to Steady if needed
-      if (onButtonUp(D1)) {
+      if (onButtonUp(D1PIN)) {
         for (int s=0; s<SLAVES_SIZE; s++) {
           Serial.print("index: ");
           Serial.print(s);
@@ -323,7 +376,7 @@ void loop() {
       animateLed(PURPLE_STEADY, 0);
 
       // On Lead win
-      if (onButtonUp(D1)) {
+      if (onButtonUp(D1PIN)) {
         // Send Win signal to Lead player
         sendState(ON_WIN, leader.index);
         // Add 1 point to Lead
@@ -342,8 +395,8 @@ void loop() {
         state = STEADY;
       }
       // On Lead lose
-      else if (onButtonUp(D7)) {
-        // Send Lose signal to Lead player
+      else if (onButtonUp(D6PIN)) {
+        // Send Lose signal to Lead playert
         sendState(ON_LOSE, leader.index);
         // Remove 1 point to Lead or do nothing
 
@@ -374,7 +427,7 @@ void loop() {
 
       animateLed(ORANGE_STEADY, 0);
 
-      if (onButtonUp(D1)) {
+      if (onButtonUp(D6PIN)) {
         // Exclude Lead player
         sendState(EXCLUDE, leader.index);
 
@@ -388,7 +441,7 @@ void loop() {
         animateLed(OFF, 0);
         state = STEADY;
       }
-      else if (onButtonUp(D7)) {
+      else if (onButtonUp(D1PIN)) {
         // Reset round for all players
         for (int s=0; s<SLAVES_SIZE; s++) {
           if (slaves[s].IP != "") {
@@ -404,6 +457,12 @@ void loop() {
 
     default: break;
   }
+
+  // Handle OTA updates
+  ArduinoOTA.handle();
+
+  // Handle OTA debug
+  // Debug.handle();
 }
 
 void animateLed(char ledState, unsigned long pauseTime) {
@@ -454,9 +513,9 @@ void animateLed(char ledState, unsigned long pauseTime) {
 
 bool onButtonUp(uint8_t pin) {
   switch(pin) {
-    case D1:
+    case D1PIN:
       // On button down
-      if (digitalRead(D1)) {
+      if (digitalRead(D1PIN)) {
         if (!D1state) {
           // D1PushTime = millis();
           D1state = true;
@@ -464,7 +523,7 @@ bool onButtonUp(uint8_t pin) {
       }
 
       // On button up
-      if (D1state && !digitalRead(D1)) {
+      if (D1state && !digitalRead(D1PIN)) {
         D1state = false;
         // D1PushTime = 0;
         return true;
@@ -473,19 +532,19 @@ bool onButtonUp(uint8_t pin) {
       return false;
       break;
 
-    case D7:
+    case D6PIN:
       // On button down
-      if (digitalRead(D7)) {
-        if (!D7state) {
-          // D7PushTime = millis();
-          D7state = true;
+      if (digitalRead(D6PIN)) {
+        if (!D6state) {
+          // D6PushTime = millis();
+          D6state = true;
         }
       }
 
       // On button up
-      if (D7state && !digitalRead(D7)) {
-        D7state = false;
-        // D7PushTime = 0;
+      if (D6state && !digitalRead(D6PIN)) {
+        D6state = false;
+        // D6PushTime = 0;
         return true;
       }
 
