@@ -1,9 +1,12 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+// #include <ArduinoOTA.h>
 #include <WiFiUdp.h>
 #include <FastLED.h>
 #define NUM_LEDS 6
 #define LED_PIN D2
+#define BUZZER_PIN D1
+#define BUZZER_LED_PIN D3
 
 CRGB leds[NUM_LEDS];
 WiFiUDP Udp;
@@ -61,7 +64,9 @@ bool onButtonDown(uint8_t);
 void setup() {
   delay(2000);
   FastLED.addLeds<WS2812B, LED_PIN, RGB>(leds, NUM_LEDS);
-  pinMode(D1, INPUT);
+  pinMode(BUZZER_PIN, INPUT);
+  pinMode(BUZZER_LED_PIN, OUTPUT);
+  digitalWrite(BUZZER_LED_PIN, LOW);
 
   state = PAIRING;
   Serial.begin(9600);
@@ -83,6 +88,9 @@ void setup() {
   Serial.println(WiFi.localIP());
 
   Udp.begin(7778);
+
+  // ArduinoOTA.setHostname("espslave");
+  // ArduinoOTA.begin();
 
   Udp.beginPacket("192.168.4.1", 7777);
   Udp.write("Connected");
@@ -107,14 +115,16 @@ void loop() {
     case STEADY:
       animateLed(ORANGE_STEADY, 0);
 
-      if (strcmp(OnMasterReceive(), "Round") == 0)
+      if (strcmp(OnMasterReceive(), "Round") == 0) {
+        digitalWrite(BUZZER_LED_PIN, HIGH);
         state = ROUND;
+      }
 
       break;
     case ROUND:
 
       // If dome button push, send message
-      if (onButtonDown(D1)) {
+      if (onButtonDown(BUZZER_PIN)) {
         Udp.beginPacket("192.168.4.1", 7777);
         Udp.write("Wuzz");
         Udp.endPacket();
@@ -122,12 +132,18 @@ void loop() {
 
       char roundResp[7];
       strncpy(roundResp, OnMasterReceive(), 7);
-      if (strcmp(roundResp, "Lead") == 0)
+      if (strcmp(roundResp, "Lead") == 0) {
         state = LEAD;
-      else if (strcmp(roundResp, "Pause") == 0)
+        digitalWrite(BUZZER_LED_PIN, LOW);
+      }
+      else if (strcmp(roundResp, "Pause") == 0) {
         state = PAUSED;
-      else if (strcmp(roundResp, "Steady") == 0)
+        digitalWrite(BUZZER_LED_PIN, LOW);
+      }
+      else if (strcmp(roundResp, "Steady") == 0) {
         state = STEADY;
+        digitalWrite(BUZZER_LED_PIN, LOW);
+      }
 
       animateLed(BLUE_STEADY, 0);
 
@@ -217,6 +233,9 @@ void loop() {
 
     default: break;
   }
+
+  // Handle OTA updates
+  // ArduinoOTA.handle();
 }
 
 
@@ -353,9 +372,9 @@ char* OnMasterReceive() {
 
 bool onButtonDown(uint8_t pin) {
   switch(pin) {
-    case D1:
+    case BUZZER_PIN:
       // On button down
-      if (digitalRead(D1)) {
+      if (!digitalRead(BUZZER_PIN)) {
         if (!D1state) {
           D1state = true;
           // D1PushTime = millis();
@@ -364,7 +383,7 @@ bool onButtonDown(uint8_t pin) {
       }
 
       // On button up
-      if (D1state && !digitalRead(D1)) {
+      if (D1state && digitalRead(BUZZER_PIN)) {
         D1state = false;
         // D1PushTime = 0;
       }
