@@ -85,6 +85,7 @@ void setColor(uint8_t);
 void animateLed(char, unsigned long);
 bool onButtonUp(uint8_t);
 char* OnSlaveReceive();
+void flushPackets();
 void onStationConnected(const WiFiEventSoftAPModeStationConnected&);
 void onStationDisconnected(const WiFiEventSoftAPModeStationDisconnected&);
 void sendState(unsigned char, int);
@@ -356,6 +357,9 @@ void loop() {
           }
         }
 
+        // Prevent concurrency Wuzz (happen on same slaves buzzer timing)
+        flushPackets();
+
         state = ROUND;
       }
       // On Lead lose
@@ -374,6 +378,9 @@ void loop() {
             sendState(ROUND, s);
           }
         }
+
+        // Prevent concurrency Wuzz (happen on same slaves buzzer timing)
+        flushPackets();
 
         state = ROUND;
       }
@@ -539,6 +546,11 @@ char* OnSlaveReceive() {
   }
   else
     return " ";
+}
+
+void flushPackets() {
+  while (Udp.parsePacket())
+    Udp.read(incomingPacket, 255);
 }
 
 void sendState(unsigned char newState, int index) {
