@@ -260,7 +260,7 @@ void loop() {
       if (onButtonUp(D1PIN)) {
         for (int s=0; s<SLAVES_SIZE ; s++) {
           if (slaves[s].IP != "") {
-            sendState(STEADY, s);
+            sendState(ROUND, s);
           }
           else {
             steadyOnce = false;
@@ -268,11 +268,12 @@ void loop() {
           }
         }
 
-        state = STEADY;
+        state = ROUND;
       }
 
       break;
 
+    // DEPRECATED
     case STEADY:
 
       animateLed(ORANGE_STEADY, 0);
@@ -294,6 +295,8 @@ void loop() {
       break;
 
     case ROUND:
+
+      animateLed(OFF, 0);
 
       if (strcmp(OnSlaveReceive(), "Wuzz") == 0) {
         Udp.beginPacket(Udp.remoteIP(), 7778);
@@ -323,11 +326,11 @@ void loop() {
           Serial.print("   state: ");
           Serial.println(slaves[s].state);
           if (slaves[s].state == ROUND && slaves[s].IP != "") {
-            sendState(STEADY, s);
+            sendState(ROUND, s);
           }
         }
 
-        state = STEADY;
+        state = ROUND;
       }
 
       break;
@@ -349,11 +352,11 @@ void loop() {
 
         for (int s=0; s<SLAVES_SIZE; s++) {
           if (slaves[s].IP != "") {
-            sendState(STEADY, s);
+            sendState(ROUND, s);
           }
         }
 
-        state = STEADY;
+        state = ROUND;
       }
       // On Lead lose
       else if (onButtonUp(D6PIN)) {
@@ -361,7 +364,18 @@ void loop() {
         sendState(ON_LOSE, leader.index);
         // Remove 1 point to Lead or do nothing
 
-        state = ON_LOSE;
+        unsigned long resetWait = millis();
+        while (millis() - resetWait < 2000) {
+          yield();
+        }
+
+        for (int s=0; s<SLAVES_SIZE; s++) {
+          if (slaves[s].IP != "") {
+            sendState(ROUND, s);
+          }
+        }
+
+        state = ROUND;
       }
 
       break;

@@ -127,8 +127,10 @@ void loop() {
       if (millis() - LEDTime > 2000)
         animateLed(GREEN_PING, 50);
 
-      if (strcmp(OnMasterReceive(), "Steady") == 0)
-        state = STEADY;
+      if (strcmp(OnMasterReceive(), "Round") == 0) {
+        digitalWrite(BUZZER_LED_PIN, HIGH);
+        state = ROUND;
+      }
 
       break;
 
@@ -219,8 +221,10 @@ void loop() {
       strncpy(pauseResp, OnMasterReceive(), 9);
       if (strcmp(pauseResp, "Steady") == 0)
         state = STEADY;
-      else if (strcmp(pauseResp, "Round") == 0)   // TODO: remove ROUND ? -> bad UX
+      else if (strcmp(pauseResp, "Round") == 0) {
+        digitalWrite(BUZZER_LED_PIN, HIGH);
         state = ROUND;
+      }
 
       break;
 
@@ -234,8 +238,10 @@ void loop() {
       //   resetWait = 0;
       // }
 
-      if (strcmp(OnMasterReceive(), "Steady") == 0)
-        state = STEADY;   // Or ROUND
+      if (strcmp(OnMasterReceive(), "Round") == 0) {
+        digitalWrite(BUZZER_LED_PIN, HIGH);
+        state = ROUND;
+      }
 
       animateLed(GREEN_BREATHING, 5);
 
@@ -247,8 +253,10 @@ void loop() {
       strncpy(loseResp, OnMasterReceive(), 9);
       if (strcmp(loseResp, "Exclude") == 0)
         state = EXCLUDED;
-      else if (strcmp(loseResp, "Steady") == 0)
-        state = STEADY;
+      else if (strcmp(loseResp, "Round") == 0) {
+        digitalWrite(BUZZER_LED_PIN, HIGH);
+        state = ROUND;
+      }
 
       animateLed(RED_BREATHING, 5);
 
