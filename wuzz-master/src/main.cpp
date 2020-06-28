@@ -99,7 +99,7 @@ void doGreenRound();
 bool doOnce = true;
 
 void setup() {
-  delay(2000);
+  // delay(2000);
   FastLED.addLeds<WS2812B, LED_PIN, RGB>(leds, NUM_LEDS);
   pinMode(D1PIN, INPUT);
   pinMode(D6PIN, INPUT);

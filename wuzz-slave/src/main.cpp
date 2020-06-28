@@ -69,7 +69,7 @@ bool onButtonDown(uint8_t);
 void printDetail(uint8_t type, int value);
 
 void setup() {
-  delay(2000);  // TODO: check if needed
+  // delay(2000);
   FastLED.addLeds<WS2812B, LED_PIN, RGB>(leds, NUM_LEDS);
   pinMode(BUZZER_PIN, INPUT);
   pinMode(BUZZER_LED_PIN, OUTPUT);
