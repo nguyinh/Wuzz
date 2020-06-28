@@ -15,6 +15,7 @@ WiFiUDP Udp;
 WiFiEventHandler stationConnectedHandler;
 WiFiEventHandler stationDisconnectedHandler;
 
+
 // ENUMS & STRUCTS
 enum masterState {
   BOOTING,
@@ -32,6 +33,7 @@ enum ledState {
   BLUE_BREATHING,
   ORANGE_STEADY,
   PURPLE_STEADY,
+  GREEN_ROUND,
   OFF
 };
 
@@ -73,6 +75,8 @@ unsigned long LEDTime = 0;
 // LEDS
 uint8_t blueColor = 0;
 boolean blueBreathFlow = true;
+unsigned int greenRoundPosition = NUM_LEDS * 2;
+boolean greenRoundState = false;
 
 // BUTTONS
 boolean D1state = false;
@@ -82,13 +86,14 @@ boolean D6state = false;
 
 // PROTOTYPES
 void setColor(uint8_t);
-void animateLed(char, unsigned long);
+boolean animateLed(char, unsigned long);
 bool onButtonUp(uint8_t);
 char* OnSlaveReceive();
 void flushPackets();
 void onStationConnected(const WiFiEventSoftAPModeStationConnected&);
 void onStationDisconnected(const WiFiEventSoftAPModeStationDisconnected&);
 void sendState(unsigned char, int);
+void doGreenRound();
 
 // DEBUG
 bool doOnce = true;
@@ -151,6 +156,7 @@ void loop() {
           incomingPacket[len] = 0;
         Serial.printf("[%s] %s\n", Udp.remoteIP().toString().c_str(), incomingPacket);
         if (strcmp(incomingPacket, "Connected") == 0) {
+          doGreenRound();
           for (int s=0; s<SLAVES_SIZE ; s++) {
             if (slaves[s].IP == "") {
               slaves[s].IP = Udp.remoteIP().toString().c_str();
@@ -256,7 +262,10 @@ void loop() {
       //   }
       // }
 
-      animateLed(BLUE_BREATHING, 5);
+      
+      if (!animateLed(GREEN_ROUND, 100))
+        animateLed(BLUE_BREATHING, 20);
+      
 
       if (onButtonUp(D1PIN)) {
         for (int s=0; s<SLAVES_SIZE ; s++) {
@@ -447,7 +456,7 @@ void loop() {
   // Debug.handle();
 }
 
-void animateLed(char ledState, unsigned long pauseTime) {
+boolean animateLed(char ledState, unsigned long pauseTime) {
   switch(ledState) {
     case BLUE_BREATHING:
       if (millis() - LEDTime >= pauseTime) {
@@ -483,6 +492,21 @@ void animateLed(char ledState, unsigned long pauseTime) {
         FastLED.show();
       }
       break;
+    case GREEN_ROUND:
+      if (greenRoundPosition >= NUM_LEDS + 2) return false;
+
+      if (millis() - LEDTime >= pauseTime) {
+        LEDTime = millis();
+        for (unsigned int i = 0; i < NUM_LEDS; i++) {
+          if (i == greenRoundPosition - 1) leds[i] = CRGB(5, 0, 0);
+          else if (i == greenRoundPosition) leds[i] = CRGB(50, 0, 0);
+          else if (i == greenRoundPosition + 1) leds[i] = CRGB(5, 0, 0);
+          else leds[i] = CRGB::Black;
+        }
+        greenRoundPosition++;
+        FastLED.show();
+      }
+      break;
     case OFF:
       for (int i = 0; i < NUM_LEDS; i++) {
         leds[i] = CRGB::Black;
@@ -491,6 +515,12 @@ void animateLed(char ledState, unsigned long pauseTime) {
       break;
     default: break;
   }
+  
+  return true;
+}
+
+void doGreenRound() {
+  greenRoundPosition = 0;
 }
 
 bool onButtonUp(uint8_t pin) {
