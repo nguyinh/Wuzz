@@ -3,6 +3,8 @@
 // #include <ArduinoOTA.h>
 #include <WiFiUdp.h>
 #include <FastLED.h>
+#include <SoftwareSerial.h>
+#include <DFRobotDFPlayerMini.h>
 #define NUM_LEDS 6
 #define LED_PIN D2
 #define BUZZER_PIN D1
@@ -55,22 +57,37 @@ boolean greenBreathFlow = true;
 uint8_t redColor = 0;
 boolean redBreathFlow = true;
 
+// DFPLAYER
+SoftwareSerial playerSerial(D6, D5); // RX, TX
+DFRobotDFPlayerMini DFPlayer;
+
 // PROTOTYPES
 void animateLed(char, unsigned long);
 char* OnMasterReceive();
 bool onButtonDown(uint8_t);
 
+void printDetail(uint8_t type, int value);
 
 void setup() {
-  delay(2000);
+  delay(2000);  // TODO: check if needed
   FastLED.addLeds<WS2812B, LED_PIN, RGB>(leds, NUM_LEDS);
   pinMode(BUZZER_PIN, INPUT);
   pinMode(BUZZER_LED_PIN, OUTPUT);
   digitalWrite(BUZZER_LED_PIN, LOW);
 
   state = PAIRING;
+  playerSerial.begin(9600);
   Serial.begin(9600);
   Serial.println();
+
+  if (!DFPlayer.begin(playerSerial, false)) {
+    Serial.println(F("[DFPlayer unable to begin]"));
+    while(true){
+      delay(0); // ESP8266 watch dog requirement
+    }
+  }
+  Serial.println(F("[DFPlayer Mini ready]"));
+  // DFPlayer.setTimeOut(500);
 
   WiFi.mode(WIFI_STA);
   Serial.println("[Connecting to Access point ...]");
@@ -97,6 +114,9 @@ void setup() {
   Udp.endPacket();
 
   LEDTime = millis();
+
+  DFPlayer.volume(23);
+  DFPlayer.play(7);
 
   animateLed(GREEN_PING, 2000);
 }
@@ -135,6 +155,7 @@ void loop() {
       if (strcmp(roundResp, "Lead") == 0) {
         state = LEAD;
         digitalWrite(BUZZER_LED_PIN, LOW);
+        DFPlayer.play(1);
       }
       else if (strcmp(roundResp, "Pause") == 0) {
         state = PAUSED;
@@ -169,9 +190,11 @@ void loop() {
       if (strcmp(leadResp, "Win") == 0) {
         resetWait = millis(); //TODO: changename
         state = WIN;
+        DFPlayer.play(3);
       }
       else if (strcmp(leadResp, "Lose") == 0) {
         state = LOSE;
+        DFPlayer.play(2);
       }
       else if (strcmp(leadResp, "Excluded") == 0) {
         state = EXCLUDED;
@@ -232,6 +255,15 @@ void loop() {
       break;
 
     default: break;
+  }
+
+  // Serial.println(DFPlayer.readState());
+  // if (DFPlayer.readState() == 512) {
+  //   DFPlayer.play(loopCount);
+  //   loopCount++;
+  // }
+  if (DFPlayer.available()) {
+    printDetail(DFPlayer.readType(), DFPlayer.read()); //Print the detail message from DFPlayer to handle different errors and states.
   }
 
   // Handle OTA updates
@@ -392,4 +424,69 @@ bool onButtonDown(uint8_t pin) {
     default: break;
   }
   return false;
+}
+
+
+
+
+void printDetail(uint8_t type, int value){
+  switch (type) {
+    case TimeOut:
+      Serial.println(F("Time Out!"));
+      break;
+    case WrongStack:
+      Serial.println(F("Stack Wrong!"));
+      break;
+    case DFPlayerCardInserted:
+      Serial.println(F("Card Inserted!"));
+      break;
+    case DFPlayerCardRemoved:
+      Serial.println(F("Card Removed!"));
+      break;
+    case DFPlayerCardOnline:
+      Serial.println(F("Card Online!"));
+      break;
+    case DFPlayerUSBInserted:
+      Serial.println("USB Inserted!");
+      break;
+    case DFPlayerUSBRemoved:
+      Serial.println("USB Removed!");
+      break;
+    case DFPlayerPlayFinished:
+      Serial.print(F("Number:"));
+      Serial.print(value);
+      Serial.println(F(" Play Finished!"));
+      break;
+    case DFPlayerError:
+      Serial.print(F("DFPlayerError:"));
+      switch (value) {
+        case Busy:
+          Serial.println(F("Card not found"));
+          break;
+        case Sleeping:
+          Serial.println(F("Sleeping"));
+          break;
+        case SerialWrongStack:
+          Serial.println(F("Get Wrong Stack"));
+          break;
+        case CheckSumNotMatch:
+          Serial.println(F("Check Sum Not Match"));
+          break;
+        case FileIndexOut:
+          Serial.println(F("File Index Out of Bound"));
+          break;
+        case FileMismatch:
+          Serial.println(F("Cannot Find File"));
+          break;
+        case Advertise:
+          Serial.println(F("In Advertise"));
+          break;
+        default:
+          break;
+      }
+      break;
+    default:
+      break;
+  }
+  
 }
